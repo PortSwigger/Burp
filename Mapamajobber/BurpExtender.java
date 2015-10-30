@@ -1,8 +1,19 @@
 /*
  * Mapamajobber - Extract Burp proxy history to a file to illustrate all end points
+ *
+ * Write comma-delimited file with the following fields:
+ *	Protocol
+ *	Host
+ *	Port
+ *	Path
+ *	Page
+ *	Parameters - JSONified parameters; "Field" : "Value", ...
+ *	Cookie - JSONified cookie-parameters
  * 
  * Aids with documentation for OTG-INFO-007: Map execution paths through application
  * and OTG-INFO-006: Identify application entry points
+ *
+ * Note that output file is hardcoded to /tmp/proxyHistory.csv
  * 
  * Next version will allow for filtering of exported filetypes
  */
