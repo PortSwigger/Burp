@@ -7,8 +7,8 @@
  *	Port
  *	Path
  *	Page
- *	Parameters - JSONified parameters; "Field" : "Value", ...
- *	Cookie - JSONified cookie-parameters
+ *	Parameters - Querystring-like; "Field=Value&..."
+ *	Cookie - Cookie contents
  * 
  * Aids with documentation for OTG-INFO-007: Map execution paths through application
  * and OTG-INFO-006: Identify application entry points
