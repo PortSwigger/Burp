@@ -29,7 +29,10 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 import javax.swing.DefaultListModel;
 import javax.swing.JPanel;
@@ -141,6 +144,9 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 
 	// Processes Proxy History and creates tables of in scope requests
 	private void populate() {
+		final boolean EXCLUDEVIEWSTATE = true;
+		
+		
 		synchronized (log) {
 			for (IHttpRequestResponse rr : callbacks.getProxyHistory()) {
 				try {
@@ -165,11 +171,13 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 
 									cookie += param.getName() + "=" + param.getValue();
 								} else {
-									if (parameters.length() > 0) {
-										parameters += "&";
+									if(!param.getName().matches(".*VIEWSTATE.*") || EXCLUDEVIEWSTATE == false){
+										if (parameters.length() > 0) {
+											parameters += "&";
+										}
+	
+										parameters += param.getName() + "=" + param.getValue();
 									}
-
-									parameters += param.getName() + "=" + param.getValue();
 								}
 
 							}
@@ -204,7 +212,11 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 
 	// Output the Proxy History items to a comma-delimited file
 	private void writeFile() {
-		String record;
+		String record = "";
+		//String qualifier = "\"";
+		String qualifier = "";
+
+		Set<LogEntry> recordSet = new HashSet<LogEntry>(log);
 
 		try {
 			File aFile = new File("/tmp/proxyHistory" + ".csv");
@@ -220,10 +232,10 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 			// Output header row
 			outputFile.write("Protocol, Host, Port, Path, Page, Parameters, Cookie\n");
 
-			for (LogEntry le : log) {
+			for (LogEntry le : recordSet) {
 				try {
-					record = "\"" + le.protocol + "\", ";
-					record += "\"" + le.host + "\", ";
+					record = qualifier + le.protocol + qualifier + ", ";
+					record += qualifier + le.host + qualifier +", ";
 					record += "" + le.port + ", ";
 
 					// Convert URL to path
@@ -233,19 +245,29 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 							le.protocol + "://" + le.host + ":" + le.port, "");
 
 					// Write the path
-					record += "\"" + path.substring(0, path.lastIndexOf("/") + 1) + "\", ";
+					record += qualifier + path.substring(0, path.lastIndexOf("/") + 1) + qualifier + ", ";
 
 					// Write the page
-					record += "\"" + path.substring(path.lastIndexOf("/") + 1) + "\", ";
+					record += qualifier + path.substring(path.lastIndexOf("/") + 1) + qualifier + ", ";
 
 					record += le.params + ", ";
-					record += le.cookie + "\n";
+					// record += le.cookie + "\n";
 
 					outputFile.write(record);
+					//recordSet.add(record);
+					
+					
 				} catch (Exception x) {
 					x.printStackTrace();
 				}
 			}
+			
+			// Write file
+			//outputFile.write(recordSet);
+//			Iterator<String> it = recordSet.iterator();
+//			while(it.hasNext()) {
+//			    outputFile.write(it.next() + "\n");
+//			}
 		} catch (Exception catchX) {
 			System.out.println("Could not write to file: " + catchX.getMessage());
 			return;
