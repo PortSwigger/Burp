@@ -1,28 +1,27 @@
-/*
- * Mapamajobber - Extract Burp proxy history to a file to illustrate all end points
+/*****************************************************************************
+ * Mapamajobber - Extract Burp's Proxy History tab contents to a file to 
+ * 		illustrate all end points
+ * 
+ * Aids with documentation of OWASP Testing Guide V4 tests OTG-INFO-007: Map 
+ * execution paths through application and OTG-INFO-006: Identify application 
+ * entry points
  *
  * Write comma-delimited file with the following fields:
- *	Protocol
- *	Host
+ *	Protocol - Text protocol (http/https)
+ *	Host - Domain name of site
  *	Port
  *	Path
- *	Page
- *	Parameters - Querystring-like; "Field=Value&..."
- *	Cookie - Cookie contents
- * 
- * Aids with documentation for OTG-INFO-007: Map execution paths through application
- * and OTG-INFO-006: Identify application entry points
- *
- * Note that output file is hardcoded to /tmp/proxyHistory.csv
- * 
- * Next version will allow for filtering of exported filetypes
+ *	Page - Requested resource
+ *  Query String
+ *	Parameters - URL, ampersand-delimited field/value pairs
+ *	Cookie - Semi-colon delimited field/value pairs
  */
 package burp;
 
 import java.io.BufferedWriter; // Output file writing
 import java.io.File;
 import java.io.FileWriter;
-import java.io.PrintWriter; // Error/output streams
+//import java.io.PrintWriter; // Error/output streams
 import java.awt.Component;
 import java.awt.Dimension; // Used to size button
 import java.awt.event.ActionEvent;
@@ -30,11 +29,12 @@ import java.awt.event.ActionListener;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-import javax.swing.DefaultListModel;
+import javax.swing.JCheckBox;
+import javax.swing.JOptionPane;
+//import javax.swing.DefaultListModel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane; // UI panes^H^H^Hin
@@ -42,8 +42,10 @@ import javax.swing.JSplitPane; // UI panes^H^H^Hin
 import javax.swing.JTable;
 import javax.swing.JButton; // UI button
 import javax.swing.SwingUtilities; // UI
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableModel;
+import javax.swing.JFileChooser;
 
 public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 		ITab, ActionListener {
@@ -51,6 +53,15 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 	private IBurpExtenderCallbacks callbacks;
 	private IExtensionHelpers helpers;
 	private JSplitPane splitPane;
+	
+	// Options to control file contents
+	private static JCheckBox optScope = new JCheckBox("In scope only", true);
+	private static JCheckBox optUnique = new JCheckBox("Unique results");
+	private static JCheckBox optIncludeParam = new JCheckBox("Include parameters", true);
+	private static JCheckBox optIncludeViewstate = new JCheckBox("Include VIEWSTATE parameters (.NET)", false);
+	private static JCheckBox optIncludeCookie = new JCheckBox("Include cookies", true);
+	
+	// Log entry listing
 	private final List<LogEntry> log = new ArrayList<LogEntry>();
 
 	// Extender actions
@@ -70,7 +81,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 		// set our extension name
 		callbacks.setExtensionName("Mapamajobber");
 
-		// create our UI
+		// Create our lame UI (Swing is too horrible to figure out) 
 		SwingUtilities.invokeLater(new Runnable() {
 			@Override
 			public void run() {
@@ -82,6 +93,12 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 				/* Create option interface in top pane */
 				JPanel topPanel = new JPanel();
 
+				topPanel.add(optScope);
+				topPanel.add(optUnique);
+				topPanel.add(optIncludeParam);
+				topPanel.add(optIncludeViewstate);
+				topPanel.add(optIncludeCookie);
+				
 				// Run Button
 				JButton btnRun = new JButton("Run");
 				btnRun.addActionListener(BurpExtender.this);
@@ -131,66 +148,61 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		callbacks.issueAlert("Performing action...");
 		if (e.getActionCommand().equals(POPULATE)) {
-			callbacks.issueAlert("Populating");
 			populate();
 		} else if (e.getActionCommand().equals(WRITE)) {
-			callbacks.issueAlert("Exporting");
 			writeFile();
 		}
-
 	}
 
-	// Processes Proxy History and creates tables of in scope requests
+	// Processes Proxy History and creates table of in scope requests
 	private void populate() {
-		final boolean EXCLUDEVIEWSTATE = true;
-		
+		String parameters = "";
+		String cookie = "";
 		
 		synchronized (log) {
+			log.clear();
+			
 			for (IHttpRequestResponse rr : callbacks.getProxyHistory()) {
 				try {
 					URL url = helpers.analyzeRequest(rr).getUrl();
 
 					// Limit to in scope items
-					if (callbacks.isInScope(url)) {
+					if (callbacks.isInScope(url) || !optScope.isSelected()) {
 						// Build a list of parameters
-						// TODO: Option for including values
-						String parameters = "";
-						String cookie = "";
-
-						List<IParameter> params = helpers.analyzeRequest(rr)
-								.getParameters();
-						if (!params.isEmpty()) {
-							for (IParameter param : params) {
-								// Check if parameter is a cookie
-								if (param.getType() == 2) {
-									if (cookie.length() > 0) {
-										cookie += "; ";
-									}
-
-									cookie += param.getName() + "=" + param.getValue();
-								} else {
-									if(!param.getName().matches(".*VIEWSTATE.*") || EXCLUDEVIEWSTATE == false){
-										if (parameters.length() > 0) {
-											parameters += "&";
+						if(optIncludeParam.isSelected() || optIncludeCookie.isSelected()) {
+							parameters = "";
+							cookie = "";
+							
+							// TODO: Option for including values
+							List<IParameter> params = helpers.analyzeRequest(rr)
+									.getParameters();
+							if (!params.isEmpty()) {
+								for (IParameter param : params) {
+									// Check if parameter is a cookie
+									if (param.getType() == 2 && optIncludeCookie.isSelected()) {
+										if (cookie.length() > 0) {
+											cookie += "; ";
 										}
 	
-										parameters += param.getName() + "=" + param.getValue();
+										cookie += param.getName() + "=" + param.getValue();
+									} else if(optIncludeParam.isSelected()) {
+										// Include parameters, evaluating 
+										// for VIEWSTATE setting
+										if (optIncludeViewstate.isSelected()
+												|| !param.getName().matches(".*VIEWSTATE.*")) {
+											if (parameters.length() > 0) {
+												parameters += "&";
+											}
+		
+											parameters += param.getName() + "=" + param.getValue();
+										}
 									}
+	
 								}
-
 							}
 						}
-
-						if (cookie.length() > 0) {
-							cookie = "\"" + cookie + "\"";
-						}
-
-						if (parameters.length() > 0) {
-							parameters = "\"" + parameters + "\"";
-						}
-
+							
 						IHttpService rrService = rr.getHttpService();
 
 						String protocol = rrService.getProtocol();
@@ -201,6 +213,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 						int row = log.size();
 						log.add(new LogEntry(protocol, host, port, url,
 								parameters, cookie));
+						
 						fireTableRowsInserted(row, row);
 					}
 				} catch (Exception x) {
@@ -213,29 +226,38 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 	// Output the Proxy History items to a comma-delimited file
 	private void writeFile() {
 		String record = "";
-		//String qualifier = "\"";
-		String qualifier = "";
+		String queryString = "";
 
+		// Check for log
+		if(log.size() == 0) {
+			populate();
+		}
+		
+		// Get unique set of proxy records to write
 		Set<LogEntry> recordSet = new HashSet<LogEntry>(log);
 
 		try {
-			File aFile = new File("/tmp/proxyHistory" + ".csv");
-			outputFile = new BufferedWriter(new FileWriter(aFile,
-					aFile.exists()));
+			// Select file
+			File fileHandle = getFilename("Mapamajobber");
+
+			outputFile = new BufferedWriter(new FileWriter(fileHandle));
 		} catch (Exception catchX) {
-			System.out.println("Output file error: " + catchX.getMessage());
+			if(catchX.getMessage() != null) {
+				System.out.println("Output file error: " + catchX.getMessage());
+			}
+			
 			return;
 		}
 
 		// Output site map contents
 		try {
 			// Output header row
-			outputFile.write("Protocol, Host, Port, Path, Page, Parameters, Cookie\n");
+			outputFile.write("Protocol, Host, Port, Path, Page, QueryString, Parameters, Cookie\n");
 
 			for (LogEntry le : recordSet) {
 				try {
-					record = qualifier + le.protocol + qualifier + ", ";
-					record += qualifier + le.host + qualifier +", ";
+					record = le.protocol + ", ";
+					record += le.host + ", ";
 					record += "" + le.port + ", ";
 
 					// Convert URL to path
@@ -244,30 +266,35 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 					String path = le.url.toString().replace(
 							le.protocol + "://" + le.host + ":" + le.port, "");
 
-					// Write the path
-					record += qualifier + path.substring(0, path.lastIndexOf("/") + 1) + qualifier + ", ";
+					// Check for query string as it impacts path/page handling
+					if(path.contains("?")) {
+						queryString = path.substring(path.lastIndexOf("?") + 1);
+						
+						// Strip query string from path, since it may 
+						// contain a slash
+						path = path.substring(0, path.indexOf("?"));
+						
+					} else {
+						queryString = "";
+					}
 
-					// Write the page
-					record += qualifier + path.substring(path.lastIndexOf("/") + 1) + qualifier + ", ";
+					// Path; excludes page/query string
+					record += path.substring(0, path.lastIndexOf("/") + 1) + ", ";
 
+					// Page; excludes the path and query string
+					record += path.substring(path.lastIndexOf("/") + 1) + ", ";
+					
+					// Query string
+					record += queryString + ", ";
+					
 					record += le.params + ", ";
-					// record += le.cookie + "\n";
+					record += le.cookie + "\n";
 
 					outputFile.write(record);
-					//recordSet.add(record);
-					
-					
 				} catch (Exception x) {
 					x.printStackTrace();
 				}
 			}
-			
-			// Write file
-			//outputFile.write(recordSet);
-//			Iterator<String> it = recordSet.iterator();
-//			while(it.hasNext()) {
-//			    outputFile.write(it.next() + "\n");
-//			}
 		} catch (Exception catchX) {
 			System.out.println("Could not write to file: " + catchX.getMessage());
 			return;
@@ -279,9 +306,45 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 			System.out.println("Could not close file: " + catchX.getMessage());
 			return;
 		}
-
 	}
 
+	// Get file handle to write to
+	private File getFilename(String filename) {
+		File handle = null;
+		FileNameExtensionFilter filter = new FileNameExtensionFilter("Comma-delimited text (CSV)", "csv");
+		JFileChooser chooser = null;
+		
+		if(chooser == null) {
+			chooser = new JFileChooser();
+			chooser.setDialogTitle("Export Proxy History");
+			chooser.setFileFilter(filter);
+			chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+			chooser.setSelectedFile(new File(filename + ".csv"));
+			chooser.setAcceptAllFileFilterUsed(false);                      
+		}
+
+		int val = chooser.showSaveDialog((Component)null);
+
+		if(val == JFileChooser.APPROVE_OPTION) {
+			handle = chooser.getSelectedFile();
+		}
+
+		if(handle.exists()) {
+			int result = JOptionPane.showConfirmDialog(null,"The file exists, overwrite?","Existing file",JOptionPane.YES_NO_CANCEL_OPTION);
+            switch(result){
+                case JOptionPane.NO_OPTION:
+                    handle = getFilename("Mapamajobber");
+                case JOptionPane.CLOSED_OPTION:
+                    handle = null;
+                case JOptionPane.CANCEL_OPTION:
+                    handle = null;
+            }			
+		}
+			
+		return handle;
+	}
+	
+	
 	//
 	// extend AbstractTableModel
 	//
@@ -343,14 +406,16 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 		}
 	}
 
-	// extend JTable to handle cell selection
+	// Extend JTable to handle cell selection
 	private class Table extends JTable {
+		private static final long serialVersionUID = 3924318623855753102L;
+
 		public Table(TableModel tableModel) {
 			super(tableModel);
 		}
 	}
 
-	// class to hold details of each log entry
+	// Log Entry record structure
 	private static class LogEntry {
 		final String protocol;
 		final String host;
@@ -367,6 +432,31 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 			this.url = url;
 			this.params = params;
 			this.cookie = cookie;
+		}
+
+		// Used to determine what constitutes a unique record
+		@Override
+		public boolean equals(Object compare) {
+			LogEntry obj = (LogEntry)compare;
+
+			// TODO: Options to determine unique records
+			if(optUnique.isSelected()) {
+				if(url.equals(obj.url)) {
+					return true;
+				}
+			} else if(url.equals(obj.url)
+					&& params.equals(obj.params) 
+					&& cookie.equals(obj.cookie)
+					) {
+				return true;
+			}
+
+			return false;
+		}
+		
+		@Override
+		public int hashCode() {
+			return (url).hashCode(); 
 		}
 	}
 }
