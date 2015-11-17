@@ -15,6 +15,10 @@
  *  Query String
  *	Parameters - URL, ampersand-delimited field/value pairs
  *	Cookie - Semi-colon delimited field/value pairs
+ *
+ * Generates a Mindmap (Freemind.sourceforge.net). Note that layout is very
+ * generic and can be immediately improved by opening in Freemind, selecting
+ * root node and using Tools/Sort Children
  */
 package burp;
 
@@ -63,6 +67,9 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 	
 	// Log entry listing
 	private final List<LogEntry> log = new ArrayList<LogEntry>();
+	
+	// Mindmap Node list
+	private final List<XmlNode> node = new ArrayList<XmlNode>();
 
 	// Extender actions
 	private String POPULATE = "0";
@@ -151,7 +158,13 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 		if (e.getActionCommand().equals(POPULATE)) {
 			populate();
 		} else if (e.getActionCommand().equals(WRITE)) {
+			// Check for log
+			if(log.size() == 0) {
+				populate();
+			}
+			
 			writeFile();
+			writeMindmap();
 		}
 	}
 
@@ -228,17 +241,12 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 		String record = "";
 		String queryString = "";
 
-		// Check for log
-		if(log.size() == 0) {
-			populate();
-		}
-		
 		// Get unique set of proxy records to write
 		Set<LogEntry> recordSet = new HashSet<LogEntry>(log);
 
 		try {
 			// Select file
-			File fileHandle = getFilename("Mapamajobber");
+			File fileHandle = getFilename("Mapamajobber", "csv");
 
 			outputFile = new BufferedWriter(new FileWriter(fileHandle));
 		} catch (Exception catchX) {
@@ -308,10 +316,126 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 		}
 	}
 
+	private void writeMindmap() {
+		// Use path and pages to create map
+		String xmlMap = "<map version=\"1.0.1\"><node ID=\"ID_0\">";
+		String xmlNodes = "";
+		
+		Integer xmlId;
+		int xmlParent = 0;
+		int newId = 1;
+		
+		String[] resources;
+
+		for (LogEntry le : log) {
+			try {
+				// Remove host
+				String path = le.url.toString().replace(
+						le.protocol + "://" + le.host + ":" + le.port, "");
+
+				// Check for query string as it impacts path/page handling
+				if(path.contains("?")) {
+					// Strip query string from path, since it may 
+					// contain a slash
+					path = path.substring(0, path.indexOf("?"));
+				}
+				
+				// Clear the leading slash
+				if(path.startsWith("/")) {
+					path = path.substring(1);
+				}
+
+				// Use directories and pages as a list of resources
+				resources = path.split("/");
+				
+				// Cycle through resources to determine unique parent/child occurrences
+				for(int i = 0; i < resources.length; i++) {
+					xmlId = null;
+					
+					// First resource, point back to root
+					if(i == 0) {
+						xmlParent = 0;
+					}
+					
+					// Search for existing node
+					for(XmlNode resource : node) {
+						if(resources[i].equals(resource.Text) && resource.Parent == xmlParent) {
+							xmlId = resource.Id;
+							break;
+						}
+					}
+					
+					// New node, add it
+					if(xmlId == null) {
+						xmlId = newId++;
+						node.add(new XmlNode(xmlId, resources[i], xmlParent));
+					}
+					
+					// Store Id as Parent for next resource
+					xmlParent = xmlId;
+				}
+			} catch (Exception x) {
+				x.printStackTrace();
+			}
+		}
+		
+		try {
+			// Select file
+			File fileHandle = getFilename("Mapamajobber", "mm");
+
+			outputFile = new BufferedWriter(new FileWriter(fileHandle));
+		} catch (Exception catchX) {
+			if(catchX.getMessage() != null) {
+				System.out.println("Output file error: " + catchX.getMessage());
+			}
+			
+			return;
+		}
+		
+		// Output Mindmap nodes
+		try {
+			// Loop through resources
+			for (XmlNode xn : node) {
+				try {
+					// Use base resources to determine all children
+					if(xn.Parent == 0) {
+						xmlNodes += makeNode(xn.Id);
+					}
+					
+				} catch (Exception x) {
+					x.printStackTrace();
+				}
+			}
+			
+			// Compile output and write it
+			xmlMap += xmlNodes + "</node></map>";
+			outputFile.write(xmlMap);
+			
+		} catch (Exception catchX) {
+			System.out.println("Could not write to file: " + catchX.getMessage());
+			return;
+		}
+
+		try {
+			outputFile.close();
+		} catch (Exception catchX) {
+			System.out.println("Could not close file: " + catchX.getMessage());
+			return;
+		}
+	}
+	
 	// Get file handle to write to
-	private File getFilename(String filename) {
+	private File getFilename(String filename, String extension) {
 		File handle = null;
-		FileNameExtensionFilter filter = new FileNameExtensionFilter("Comma-delimited text (CSV)", "csv");
+		FileNameExtensionFilter filter;
+		
+		switch(extension) {
+			case "mm":
+				filter = new FileNameExtensionFilter("Mindmap", "mm");
+			default:
+				filter = new FileNameExtensionFilter("Comma-delimited text (CSV)", "csv");
+		}
+		
 		JFileChooser chooser = null;
 		
 		if(chooser == null) {
@@ -319,7 +443,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 			chooser.setDialogTitle("Export Proxy History");
 			chooser.setFileFilter(filter);
 			chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
-			chooser.setSelectedFile(new File(filename + ".csv"));
+			chooser.setSelectedFile(new File(filename + "." + extension));
 			chooser.setAcceptAllFileFilterUsed(false);                      
 		}
 
@@ -333,7 +457,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 			int result = JOptionPane.showConfirmDialog(null,"The file exists, overwrite?","Existing file",JOptionPane.YES_NO_CANCEL_OPTION);
             switch(result){
                 case JOptionPane.NO_OPTION:
-                    handle = getFilename("Mapamajobber");
+                    handle = getFilename("Mapamajobber", extension);
                 case JOptionPane.CLOSED_OPTION:
                     handle = null;
                 case JOptionPane.CANCEL_OPTION:
@@ -413,6 +537,60 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 		public Table(TableModel tableModel) {
 			super(tableModel);
 		}
+	}
+	
+	// Retrieve node details and call recursively to determine child nodes
+	private String makeNode(int Id) {
+		String nodeText = "";
+		String childText = "";
+		
+		for(XmlNode xn : node) {
+			if(xn.Id == Id) {
+				// Mindmap node format: <node ID="ID_$x" TEXT="$name"></node>
+				nodeText += "<node ID=\"ID_" + Id + "\" TEXT=\"" + xn.Text + "\">";
+				
+				// Find all child nodes
+				for(XmlNode child : node) {
+					if(child.Parent == xn.Id) {
+						childText = makeNode(child.Id);
+						
+						// Check if there are no more children
+						if(childText == "") {
+							break;
+						} else {
+							nodeText += childText;
+							childText = "";
+						}
+					}
+				}
+				
+				nodeText += "</node>";
+			}
+		}
+		
+		return nodeText;
+	}
+	
+	private static class XmlNode {
+		final int Id;
+		final String Text;
+		final int Parent;
+		
+		XmlNode(int Id, String Text, int Parent) {
+			this.Id = Id;
+			this.Text = Text;
+			this.Parent = Parent;
+		}
+		
+//		public int find(String Text, int Parent) {
+//			for(XmlNode resource : node) {
+//				if(resource.Parent == Parent && resource.Text == Text) {
+//					return resource.Id;
+//				}
+//			}
+//			
+//			return -1;
+//		}
 	}
 
 	// Log Entry record structure
