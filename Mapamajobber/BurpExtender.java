@@ -25,7 +25,6 @@ package burp;
 import java.io.BufferedWriter; // Output file writing
 import java.io.File;
 import java.io.FileWriter;
-//import java.io.PrintWriter; // Error/output streams
 import java.awt.Component;
 import java.awt.Dimension; // Used to size button
 import java.awt.event.ActionEvent;
@@ -38,11 +37,9 @@ import java.util.Set;
 
 import javax.swing.JCheckBox;
 import javax.swing.JOptionPane;
-//import javax.swing.DefaultListModel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane; // UI panes^H^H^Hin
-//import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JButton; // UI button
 import javax.swing.SwingUtilities; // UI
@@ -60,10 +57,13 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 	
 	// Options to control file contents
 	private static JCheckBox optScope = new JCheckBox("In scope only", true);
-	private static JCheckBox optUnique = new JCheckBox("Unique results");
+	private static JCheckBox optUnique = new JCheckBox("Unique results", false);
+	private static JCheckBox optExclude404 = new JCheckBox("Exclude 404's", true);
 	private static JCheckBox optIncludeParam = new JCheckBox("Include parameters", true);
 	private static JCheckBox optIncludeViewstate = new JCheckBox("Include VIEWSTATE parameters (.NET)", false);
 	private static JCheckBox optIncludeCookie = new JCheckBox("Include cookies", true);
+	private static JCheckBox optOutputFile = new JCheckBox("Output Proxy log (CSV)", true);
+	private static JCheckBox optOutputMindmap = new JCheckBox("Output Mindmap", true);
 	
 	// Log entry listing
 	private final List<LogEntry> log = new ArrayList<LogEntry>();
@@ -71,7 +71,8 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 	// Mindmap Node list
 	private final List<XmlNode> node = new ArrayList<XmlNode>();
 
-	// Extender actions
+	// Extender actions (using these as boolean operations, 
+	// but setActionCommand needs strings, apparently)
 	private String POPULATE = "0";
 	private String WRITE = "1";
 
@@ -102,9 +103,12 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 
 				topPanel.add(optScope);
 				topPanel.add(optUnique);
+				topPanel.add(optExclude404);
 				topPanel.add(optIncludeParam);
 				topPanel.add(optIncludeViewstate);
 				topPanel.add(optIncludeCookie);
+				topPanel.add(optOutputFile);
+				topPanel.add(optOutputMindmap);
 				
 				// Run Button
 				JButton btnRun = new JButton("Run");
@@ -140,9 +144,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 		});
 	}
 
-	//
-	// implement ITab
-	//
+	// Implement ITab
 	@Override
 	public String getTabCaption() {
 		return "Mapamajobber";
@@ -163,8 +165,13 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 				populate();
 			}
 			
-			writeFile();
-			writeMindmap();
+			if(optOutputFile.isSelected()) {
+				writeFile();
+			}
+			
+			if(optOutputMindmap.isSelected()) {
+				writeMindmap();
+			}
 		}
 	}
 
@@ -172,13 +179,23 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 	private void populate() {
 		String parameters = "";
 		String cookie = "";
+		URL url;
+		byte[] response;		// Used to check status code
 		
 		synchronized (log) {
 			log.clear();
 			
 			for (IHttpRequestResponse rr : callbacks.getProxyHistory()) {
 				try {
-					URL url = helpers.analyzeRequest(rr).getUrl();
+					url = helpers.analyzeRequest(rr).getUrl();
+					
+					// If there is no response or we are excluding 404's, skip entry
+					response = rr.getResponse();
+					if (response == null
+							|| (optExclude404.isSelected() && helpers
+									.analyzeResponse(response).getStatusCode() == 404)) {
+						continue;
+					}
 
 					// Limit to in scope items
 					if (callbacks.isInScope(url) || !optScope.isSelected()) {
@@ -187,7 +204,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 							parameters = "";
 							cookie = "";
 							
-							// TODO: Option for including values
+							// TODO: Option for including values?
 							List<IParameter> params = helpers.analyzeRequest(rr)
 									.getParameters();
 							if (!params.isEmpty()) {
@@ -221,6 +238,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 						String protocol = rrService.getProtocol();
 						String host = rrService.getHost();
 						int port = rrService.getPort();
+						
 
 						// Insert request to output log
 						int row = log.size();
@@ -318,14 +336,55 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 
 	private void writeMindmap() {
 		// Use path and pages to create map
-		String xmlMap = "<map version=\"1.0.1\"><node ID=\"ID_0\">";
+		String xmlMap = "<map version=\"1.0.1\">";
 		String xmlNodes = "";
+		String fqdn = "";
 		
 		Integer xmlId;
 		int xmlParent = 0;
 		int newId = 1;
 		
 		String[] resources;
+		
+		// To handle multiple sites, we need to determine the FQDN, which
+		// will be used as the root node.
+		for (LogEntry le : log) {
+			if(fqdn == "") {
+				fqdn = le.host;
+			}
+			
+			// Find occurrence of different hosts
+			if(fqdn != le.host) {
+				int x;
+				int y;
+				
+				// Run backwards through the hosts to identify the first difference
+				x = fqdn.length() - 1;
+				y = le.host.length() - 1;
+				
+				while(fqdn.charAt(x) == le.host.charAt(y) && x >= 0 && y >= 0) {
+					// System.out.println("Match " + x + "/" +y);
+					if(x == 0 || y == 0) {
+						break;
+					}
+					
+					x--;
+					y--;					
+				}
+				
+				// Assume the like parts are the FQDN or that the first
+				// result was the FQDN, so there is no change
+				if(fqdn.substring(x).equalsIgnoreCase(le.host.substring(y))) {
+					fqdn = fqdn.substring(x);
+					break;
+				}
+			}
+		}
+		
+		// Add FQDN as root node >> node.add(new XmlNode(0, fqdn, 0));
+		// This is hard-coded to reduce recursion necessary to process the nodes
+		// which was throwing a stack overflow
+		xmlMap += "<node ID=\"ID_" + 0 + "\" TEXT=\"" + fqdn + "\">";
 
 		for (LogEntry le : log) {
 			try {
@@ -345,6 +404,13 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 					path = path.substring(1);
 				}
 
+				// Check for a different sub-domain and prepend to path
+				if(!le.host.equals(fqdn)) {
+					// Remove FQDN:
+					// 	Length of subdomain = [host length] - [FQDN length] - 'period'					
+					path = le.host.substring(0, (le.host.length() - fqdn.length()) - 1) + "/" + path;
+				}
+				
 				// Use directories and pages as a list of resources
 				resources = path.split("/");
 				
@@ -469,10 +535,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 	}
 	
 	
-	//
-	// extend AbstractTableModel
-	//
-
+	// Extend AbstractTableModel
 	@Override
 	public int getRowCount() {
 		return log.size();
@@ -543,6 +606,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 	private String makeNode(int Id) {
 		String nodeText = "";
 		String childText = "";
+		// TODO: Modify nodes to contain formatting attributes
 		
 		for(XmlNode xn : node) {
 			if(xn.Id == Id) {
