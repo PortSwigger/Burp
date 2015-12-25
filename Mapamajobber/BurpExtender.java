@@ -354,29 +354,35 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 			}
 			
 			// Find occurrence of different hosts
-			if(fqdn != le.host) {
-				int x;
-				int y;
-				
-				// Run backwards through the hosts to identify the first difference
-				x = fqdn.length() - 1;
-				y = le.host.length() - 1;
-				
-				while(fqdn.charAt(x) == le.host.charAt(y) && x >= 0 && y >= 0) {
-					// System.out.println("Match " + x + "/" +y);
-					if(x == 0 || y == 0) {
-						break;
+			if(fqdn != le.host && !fqdn.equals("0.0.0.0")) {
+				// Check if it is an IP address
+				if(le.host.replaceAll("[0-9\\.]", "").length() == 0) {
+					// Multiple IP addresses; use 0.0.0.0
+					fqdn = "0.0.0.0";
+				} else {
+					int x;
+					int y;
+					
+					// Run backwards through the hosts to identify the first difference
+					x = fqdn.length() - 1;
+					y = le.host.length() - 1;
+					
+					while(fqdn.charAt(x) == le.host.charAt(y) && x >= 0 && y >= 0) {
+						// System.out.println("Match " + x + "/" +y);
+						if(x == 0 || y == 0) {
+							break;
+						}
+						
+						x--;
+						y--;					
 					}
 					
-					x--;
-					y--;					
-				}
-				
-				// Assume the like parts are the FQDN or that the first
-				// result was the FQDN, so there is no change
-				if(fqdn.substring(x).equalsIgnoreCase(le.host.substring(y))) {
-					fqdn = fqdn.substring(x);
-					break;
+					// Assume the like parts are the FQDN or that the first
+					// result was the FQDN, so there is no change
+					if(fqdn.substring(x).equalsIgnoreCase(le.host.substring(y))) {
+						fqdn = fqdn.substring(x);
+						break;
+					}
 				}
 			}
 		}
@@ -406,9 +412,15 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 
 				// Check for a different sub-domain and prepend to path
 				if(!le.host.equals(fqdn)) {
-					// Remove FQDN:
-					// 	Length of subdomain = [host length] - [FQDN length] - 'period'					
-					path = le.host.substring(0, (le.host.length() - fqdn.length()) - 1) + "/" + path;
+					
+					if(fqdn.equals("0.0.0.0")) {
+						// Assuming IP address; prepend
+						path = le.host + "/" + path;
+					} else {
+						// Remove FQDN:
+						// 	Length of subdomain = [host length] - [FQDN length] - 'period'					
+						path = le.host.substring(0, (le.host.length() - fqdn.length()) - 1) + "/" + path;
+					}
 				}
 				
 				// Use directories and pages as a list of resources
