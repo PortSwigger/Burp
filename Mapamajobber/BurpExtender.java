@@ -1,6 +1,7 @@
 /*****************************************************************************
- * Mapamajobber - Extract Burp's Proxy History tab contents to a file to 
- * 		illustrate all end points
+ * MindMap Explorter  - Extract Burp's Proxy History tab contents to a 
+ * 	comma-delimited and/or Mindamap files in order to illustrate all end
+ * 	points
  * 
  * Aids with documentation of OWASP Testing Guide V4 tests OTG-INFO-007: Map 
  * execution paths through application and OTG-INFO-006: Identify application 
