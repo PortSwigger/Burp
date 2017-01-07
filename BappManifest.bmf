@@ -1,0 +1,11 @@
+Uuid: 676b2e91c5a347289fca66fa67cca545
+ExtensionType: 1
+Name: MindMap Exporter
+ScreenVersion: 1.0
+SerialVersion: 1
+MinPlatformVersion: 0
+ProOnly: False
+Author: Benjamin Robinson
+ShortDescription: Aids with documentation of OWASP Testing Guide V4 tests.
+EntryPoint: build/libs/mindmap-exporter-all.jar
+BuildCommand: gradle -PburpJar=$BURP_JAR fatJar
