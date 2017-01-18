@@ -7,5 +7,5 @@ MinPlatformVersion: 0
 ProOnly: False
 Author: Benjamin Robinson
 ShortDescription: Aids with documentation of OWASP Testing Guide V4 tests.
-EntryPoint: build/libs/mindmap-exporter-all.jar
-BuildCommand: gradle -PburpJar=$BURP_JAR fatJar
+EntryPoint: build/libs/mind-map-exporter-all.jar
+BuildCommand: gradle fatJar
