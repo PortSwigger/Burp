@@ -2,7 +2,7 @@ Uuid: 676b2e91c5a347289fca66fa67cca545
 ExtensionType: 1
 Name: MindMap Exporter
 ScreenVersion: 1.1
-SerialVersion: 1
+SerialVersion: 2
 MinPlatformVersion: 0
 ProOnly: False
 Author: Benjamin Robinson
