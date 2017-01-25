@@ -88,7 +88,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 		helpers = callbacks.getHelpers();
 
 		// set our extension name
-		callbacks.setExtensionName("Mapamajobber");
+		callbacks.setExtensionName("MindMap Exporter");
 
 		// Create our lame UI (Swing is too horrible to figure out) 
 		SwingUtilities.invokeLater(new Runnable() {
@@ -148,7 +148,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 	// Implement ITab
 	@Override
 	public String getTabCaption() {
-		return "Mapamajobber";
+		return "MindMap Exporter";
 	}
 
 	@Override
@@ -265,7 +265,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 
 		try {
 			// Select file
-			File fileHandle = getFilename("Mapamajobber", "csv");
+			File fileHandle = getFilename("MindMap Exporter", "csv");
 
 			outputFile = new BufferedWriter(new FileWriter(fileHandle));
 		} catch (Exception catchX) {
@@ -460,7 +460,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 		
 		try {
 			// Select file
-			File fileHandle = getFilename("Mapamajobber", "mm");
+			File fileHandle = getFilename("MindMap Exporter", "mm");
 
 			outputFile = new BufferedWriter(new FileWriter(fileHandle));
 		} catch (Exception catchX) {
@@ -536,7 +536,7 @@ public class BurpExtender extends AbstractTableModel implements IBurpExtender,
 			int result = JOptionPane.showConfirmDialog(null,"The file exists, overwrite?","Existing file",JOptionPane.YES_NO_CANCEL_OPTION);
             switch(result){
                 case JOptionPane.NO_OPTION:
-                    handle = getFilename("Mapamajobber", extension);
+                    handle = getFilename("MindMap Exporter", extension);
                 case JOptionPane.CLOSED_OPTION:
                     handle = null;
                 case JOptionPane.CANCEL_OPTION:
