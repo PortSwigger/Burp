@@ -1,6 +1,7 @@
 Uuid: 676b2e91c5a347289fca66fa67cca545
 ExtensionType: 1
 Name: MindMap Exporter
+RepoName: mind-map-exporter
 ScreenVersion: 1.1
 SerialVersion: 3
 MinPlatformVersion: 0
